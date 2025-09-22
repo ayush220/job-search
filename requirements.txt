@@ -2,8 +2,8 @@ requests==2.31.0
 beautifulsoup4==4.12.2
 selenium==4.11.2
 python-dotenv==1.0.0
-pandas==2.1.0  # Updated to a version with pre-built wheels
+pandas==1.5.3  # More compatible version with pre-built wheels
 aiohttp==3.8.5
 fake-useragent==1.2.1
-lxml>=4.9.3  # Will use pre-built wheels
+lxml==4.9.3  # Pinned to a specific version with pre-built wheels
 
