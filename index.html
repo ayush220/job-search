@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Search Tool</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="icon" href="data:,"><!-- Empty favicon to prevent 404 -->
+    <style>
+        body {
+            padding: 30px;
+            background-color: #f8f9fa;
+        }
+        .header {
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .search-form {
+            background-color: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        .results-container {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+            padding: 25px;
+            margin-top: 30px;
+        }
+        .company-stats {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .company-card {
+            background-color: #f8f9fa;
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-size: 14px;
+            border: 1px solid #dee2e6;
+        }
+        .company-name {
+            font-weight: bold;
+        }
+        .command-output {
+            background-color: #212529;
+            color: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+            margin: 20px 0;
+        }
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+        }
+        .loading-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Job Search Tool</h1>
+            <p class="lead">Search for software engineering jobs across companies using Greenhouse ATS</p>
+        </div>
+
+        <div class="search-form">
+            <form id="searchForm">
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <label for="jobTitle" class="form-label">Job Title</label>
+                        <input type="text" class="form-control" id="jobTitle" placeholder="e.g., software engineer, backend" value="software engineer,backend">
+                        <div class="form-text">Comma-separated for multiple titles</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="location" class="form-label">Location</label>
+                        <input type="text" class="form-control" id="location" placeholder="e.g., remote, san francisco, new york" value="remote">
+                        <div class="form-text">Comma-separated for multiple locations, or 'all' for any location</div>
+                    </div>
+                </div>
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary" id="searchButton">Search Jobs</button>
+                </div>
+            </form>
+        </div>
+
+        <div id="loadingIndicator" class="loading-container d-none">
+            <div class="spinner-border text-primary mb-3" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <div>Searching for jobs... This may take a minute.</div>
+        </div>
+
+        <div id="commandOutput" class="command-output d-none"></div>
+
+        <div id="resultsContainer" class="results-container d-none">
+            <h3>Search Results <span id="resultCount" class="badge bg-primary"></span></h3>
+            
+            <h4 class="mt-4">Top Companies</h4>
+            <div id="companyStats" class="company-stats"></div>
+            
+            <div class="table-responsive mt-4">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Company</th>
+                            <th>Location</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="noResultsContainer" class="alert alert-warning d-none" role="alert">
+            <h4 class="alert-heading">No Results Found</h4>
+            <p>No jobs matching your search criteria were found. Please try different search terms.</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('searchForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            runJobSearch();
+        });
+
+        function runJobSearch() {
+            const jobTitle = document.getElementById('jobTitle').value.trim();
+            const location = document.getElementById('location').value.trim();
+            
+            // Show loading indicator
+            document.getElementById('loadingIndicator').classList.remove('d-none');
+            document.getElementById('resultsContainer').classList.add('d-none');
+            document.getElementById('noResultsContainer').classList.add('d-none');
+            document.getElementById('commandOutput').classList.remove('d-none');
+            document.getElementById('commandOutput').textContent = 'Running job search...';
+            
+            // Build the command that would be executed
+            let command = `python job_scraper.py`;
+            if (jobTitle) command += ` --title "${jobTitle}"`;
+            if (location && location.toLowerCase() !== 'all') command += ` --location "${location}"`;
+            
+            // Display the command that would be run
+            document.getElementById('commandOutput').textContent = `Executing command: ${command}\n\nPlease wait while the job scraper runs...`;
+            
+            // Make a request to our backend to run the job scraper
+            fetch('/run-job-search', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    title: jobTitle,
+                    location: location
+                }),
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Hide loading indicator
+                document.getElementById('loadingIndicator').classList.add('d-none');
+                
+                // Show console output
+                const consoleOutput = document.getElementById('commandOutput');
+                consoleOutput.style.display = 'block';
+                consoleOutput.textContent = data.output || 'No output from job scraper';
+                
+                if (data.success && data.jobs && data.jobs.length > 0) {
+                    displayResults(data.jobs);
+                } else {
+                    document.getElementById('noResultsContainer').classList.remove('d-none');
+                    if (data.error) {
+                        consoleOutput.textContent += '\n\nError: ' + data.error;
+                    }
+                }
+            })
+            .catch(error => {
+                document.getElementById('loadingIndicator').classList.add('d-none');
+                console.error('Error:', error);
+                const consoleOutput = document.getElementById('commandOutput');
+                consoleOutput.style.display = 'block';
+                consoleOutput.textContent += '\n\nError: ' + error.message;
+                document.getElementById('noResultsContainer').classList.remove('d-none');
+            });
+        }
+
+        function displayResults(jobs) {
+            const resultsTable = document.getElementById('resultsTable');
+            const resultCount = document.getElementById('resultCount');
+            const companyStats = document.getElementById('companyStats');
+            
+            // Clear previous results
+            resultsTable.innerHTML = '';
+            companyStats.innerHTML = '';
+            
+            // Update result count
+            resultCount.textContent = jobs.length;
+            
+            // Calculate company statistics
+            const companyCount = {};
+            jobs.forEach(job => {
+                if (companyCount[job.company]) {
+                    companyCount[job.company]++;
+                } else {
+                    companyCount[job.company] = 1;
+                }
+            });
+            
+            // Display company statistics
+            const sortedCompanies = Object.entries(companyCount)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10); // Show top 10 companies
+                
+            sortedCompanies.forEach(([company, count]) => {
+                const companyCard = document.createElement('div');
+                companyCard.className = 'company-card';
+                companyCard.innerHTML = `
+                    <div class="company-name">${company}</div>
+                    <div>${count} jobs</div>
+                `;
+                companyStats.appendChild(companyCard);
+            });
+            
+            // Display job results
+            jobs.forEach(job => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${job.title}</td>
+                    <td>${job.company}</td>
+                    <td>${job.location}</td>
+                    <td><a href="${job.link}" target="_blank" class="btn btn-sm btn-outline-primary">View Job</a></td>
+                `;
+                resultsTable.appendChild(row);
+            });
+            
+            // Show results container
+            document.getElementById('resultsContainer').classList.remove('d-none');
+        }
+    </script>
+</body>
+</html>
